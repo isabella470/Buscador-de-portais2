@@ -17,7 +17,7 @@ def to_excel_bytes(df):
 # --- Interface da Aplicação (sem mudanças) ---
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
 
-st.title("🌐 Buscador de Sites de Portais")
+st.title("🌐 Buscador de Sites de Portais (v2)")
 st.markdown("""
 Esta ferramenta automatiza a busca por sites de veículos de comunicação.
 **Como usar:**
@@ -95,3 +95,4 @@ if 'final_df' in st.session_state:
         file_name="sites_encontrados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
