@@ -1,75 +1,98 @@
+# Conteúdo ATUALIZADO E MAIS LEVE para o seu arquivo app.py
+
 import streamlit as st
-import pandas as pd
 import time
-# from googlesearch import search  <- DESATIVADO PARA TESTE
+from googlesearch import search
 import io
+import csv # Biblioteca nativa do Python para ler arquivos de texto com vírgulas
 
-# --- Função Auxiliar (sem mudanças) ---
-def to_excel_bytes(df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Resultados')
-    processed_data = output.getvalue()
-    return processed_data
+# --- Nova Função para gerar um arquivo CSV para download ---
+def to_csv_string(lista_de_dados):
+    output = io.StringIO()
+    # Pega os cabeçalhos do primeiro item da lista
+    if not lista_de_dados:
+        return ""
+    headers = lista_de_dados[0].keys()
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    writer.writerows(lista_de_dados)
+    return output.getvalue()
 
-# --- Interface da Aplicação (título com v2 para confirmar a atualização) ---
+# --- Interface da Aplicação ---
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
 
-st.title("🌐 Buscador de Sites de Portais (v2)") # Mantemos o v2 para saber que atualizou
+st.title("🌐 Buscador de Sites de Portais (v4 - TXT)") # Mudei para v4
 st.markdown("""
-Esta ferramenta automatiza a busca por sites de veículos de comunicação.
-**Como usar:**
-1. Prepare um arquivo Excel com as colunas `nome` e `regiao`.
-2. Faça o upload do arquivo abaixo.
-3. Clique em **"Iniciar Busca"** e aguarde o processo.
-4. Ao final, os resultados aparecerão na tela e um botão para download será disponibilizado.
+Esta ferramenta automatiza a busca por sites de veículos de comunicação a partir de um arquivo de texto (.txt).
+**Formato do .txt:** A primeira linha deve ser `nome,regiao`. As linhas seguintes devem ter o nome do veículo, uma vírgula, e a região.
 """)
 
 uploaded_file = st.file_uploader(
-    "Faça o upload do seu arquivo Excel aqui",
-    type=['xlsx']
+    "Faça o upload do seu arquivo .txt aqui",
+    type=['txt'] # Agora aceita .txt
 )
 
 if uploaded_file is not None:
     try:
-        df = pd.read_excel(uploaded_file)
-        st.success("Arquivo carregado com sucesso! Abaixo uma prévia dos dados:")
-        st.dataframe(df.head())
+        # --- Nova lógica para ler o arquivo TXT ---
+        # O arquivo vem como bytes, então decodificamos para texto
+        string_data = uploaded_file.getvalue().decode('utf-8')
+        # Usamos a biblioteca CSV para ler o texto de forma estruturada
+        reader = csv.DictReader(io.StringIO(string_data))
+        lista_de_veiculos = list(reader)
+        
+        st.success(f"Arquivo '{uploaded_file.name}' carregado com sucesso!")
+        st.write(f"Encontrados {len(lista_de_veiculos)} veículos para pesquisar.")
 
         if st.button("🚀 Iniciar Busca de Sites", type="primary"):
-            lista_sites_encontrados = []
-            total_rows = len(df)
+            resultados_finais = []
+            total_rows = len(lista_de_veiculos)
             progress_bar = st.progress(0, text="Iniciando...")
             status_text = st.empty()
 
-            for index, row in df.iterrows():
-                nome = str(row['nome'])
-                progress_text = f"Processando: {nome}... ({index + 1}/{total_rows})"
-                status_text.text(progress_text)
-                progress_bar.progress((index + 1) / total_rows, text=progress_text)
+            for index, veiculo in enumerate(lista_de_veiculos):
+                try:
+                    nome = veiculo.get('nome', '')
+                    regiao = veiculo.get('regiao', '')
+                    query = f"{nome} {regiao} portal de notícias site oficial"
+                    
+                    progress_text = f"Buscando por: {nome}... ({index + 1}/{total_rows})"
+                    status_text.text(progress_text)
+                    progress_bar.progress((index + 1) / total_rows, text=progress_text)
 
-                # --- PARTE DA BUSCA FOI DESATIVADA ---
-                # Em vez de buscar, apenas adicionamos uma mensagem de teste
-                lista_sites_encontrados.append("Busca desativada para teste")
-                time.sleep(0.1) # Pequena pausa para simular processamento
+                    search_result = search(query, num_results=1, lang='pt-br', sleep_interval=5)
+                    
+                    if search_result:
+                        veiculo['Site_Encontrado'] = search_result[0]
+                    else:
+                        veiculo['Site_Encontrado'] = "Não encontrado"
                 
-            status_text.success("✅ Processamento de teste concluído!")
-            df['Site_Encontrado'] = lista_sites_encontrados
-            st.session_state.final_df = df
+                except Exception as e:
+                    error_message = f"Erro na busca por '{nome}'. Motivo: {e}"
+                    st.error(error_message)
+                    veiculo['Site_Encontrado'] = "Falha na busca"
+                
+                resultados_finais.append(veiculo)
+
+            status_text.success("✅ Busca concluída!")
+            st.session_state.final_data = resultados_finais
 
     except Exception as e:
-        st.error(f"Ocorreu um erro ao processar o arquivo Excel: {e}")
-        st.warning("Verifique se o arquivo Excel está no formato correto e se as colunas 'nome' e 'regiao' existem.")
+        st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+        st.warning("Verifique se o arquivo .txt está no formato correto (separado por vírgulas).")
 
-if 'final_df' in st.session_state:
+if 'final_data' in st.session_state:
     st.markdown("---")
     st.subheader("Resultados da Busca")
-    final_df = st.session_state.final_df
-    st.dataframe(final_df)
-    excel_bytes = to_excel_bytes(final_df)
+    final_data = st.session_state.final_data
+    st.dataframe(final_data) # st.dataframe funciona bem com lista de dicionários!
+    
+    csv_string = to_csv_string(final_data)
+    
     st.download_button(
-        label="📥 Baixar Resultados em Excel",
-        data=excel_bytes,
-        file_name="sites_encontrados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        label="📥 Baixar Resultados em CSV",
+        data=csv_string,
+        file_name="sites_encontrados.csv",
+        mime="text/csv"
     )
+
