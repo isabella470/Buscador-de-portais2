@@ -1,15 +1,13 @@
-# Conteúdo ATUALIZADO E MAIS LEVE para o seu arquivo app.py
+# CÓDIGO FINAL E CORRIGIDO para o seu arquivo app.py
 
 import streamlit as st
 import time
 from googlesearch import search
 import io
-import csv # Biblioteca nativa do Python para ler arquivos de texto com vírgulas
+import csv
 
-# --- Nova Função para gerar um arquivo CSV para download ---
 def to_csv_string(lista_de_dados):
     output = io.StringIO()
-    # Pega os cabeçalhos do primeiro item da lista
     if not lista_de_dados:
         return ""
     headers = lista_de_dados[0].keys()
@@ -18,10 +16,9 @@ def to_csv_string(lista_de_dados):
     writer.writerows(lista_de_dados)
     return output.getvalue()
 
-# --- Interface da Aplicação ---
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
 
-st.title("🌐 Buscador de Sites de Portais (v4 - TXT)") # Mudei para v4
+st.title("🌐 Buscador de Sites de Portais (v4 - TXT)")
 st.markdown("""
 Esta ferramenta automatiza a busca por sites de veículos de comunicação a partir de um arquivo de texto (.txt).
 **Formato do .txt:** A primeira linha deve ser `nome,regiao`. As linhas seguintes devem ter o nome do veículo, uma vírgula, e a região.
@@ -29,15 +26,12 @@ Esta ferramenta automatiza a busca por sites de veículos de comunicação a par
 
 uploaded_file = st.file_uploader(
     "Faça o upload do seu arquivo .txt aqui",
-    type=['txt'] # Agora aceita .txt
+    type=['txt']
 )
 
 if uploaded_file is not None:
     try:
-        # --- Nova lógica para ler o arquivo TXT ---
-        # O arquivo vem como bytes, então decodificamos para texto
         string_data = uploaded_file.getvalue().decode('utf-8')
-        # Usamos a biblioteca CSV para ler o texto de forma estruturada
         reader = csv.DictReader(io.StringIO(string_data))
         lista_de_veiculos = list(reader)
         
@@ -62,10 +56,16 @@ if uploaded_file is not None:
 
                     search_result = search(query, num_results=1, lang='pt-br', sleep_interval=5)
                     
-                    if search_result:
-                        veiculo['Site_Encontrado'] = search_result[0]
+                    # --- INÍCIO DA CORREÇÃO ---
+                    # 1. Converte o resultado (generator) para uma lista
+                    lista_de_resultados = list(search_result)
+                    
+                    # 2. Verifica se a lista não está vazia antes de pegar o item
+                    if lista_de_resultados:
+                        veiculo['Site_Encontrado'] = lista_de_resultados[0]
                     else:
                         veiculo['Site_Encontrado'] = "Não encontrado"
+                    # --- FIM DA CORREÇÃO ---
                 
                 except Exception as e:
                     error_message = f"Erro na busca por '{nome}'. Motivo: {e}"
@@ -85,7 +85,7 @@ if 'final_data' in st.session_state:
     st.markdown("---")
     st.subheader("Resultados da Busca")
     final_data = st.session_state.final_data
-    st.dataframe(final_data) # st.dataframe funciona bem com lista de dicionários!
+    st.dataframe(final_data)
     
     csv_string = to_csv_string(final_data)
     
@@ -95,4 +95,3 @@ if 'final_data' in st.session_state:
         file_name="sites_encontrados.csv",
         mime="text/csv"
     )
-
