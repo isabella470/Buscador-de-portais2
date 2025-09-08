@@ -1,3 +1,6 @@
+# --- CÓDIGO COMPLETO E CORRIGIDO (v5) ---
+
+import streamlit as st
 import time
 from googlesearch import search
 import io
@@ -68,7 +71,6 @@ if uploaded_file is not None:
                 
                 resultados_finais.append(veiculo)
 
-                # --- MUDANÇA IMPORTANTE ---
                 # Adicionamos a pausa aqui, com uma mensagem de feedback
                 if index < total_rows - 1: # Não pausa depois do último item
                     status_text.info(f"Pausa de 5s para evitar bloqueio... Próximo: item {index + 2}/{total_rows}")
@@ -96,3 +98,4 @@ if 'final_data' in st.session_state:
         file_name="sites_encontrados.csv",
         mime="text/csv"
     )
+
