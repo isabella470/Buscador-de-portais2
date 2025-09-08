@@ -1,6 +1,3 @@
-# CÓDIGO FINAL E CORRIGIDO para o seu arquivo app.py
-
-import streamlit as st
 import time
 from googlesearch import search
 import io
@@ -18,7 +15,7 @@ def to_csv_string(lista_de_dados):
 
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
 
-st.title("🌐 Buscador de Sites de Portais (v4 - TXT)")
+st.title("🌐 Buscador de Sites de Portais (v5 - Feedback)")
 st.markdown("""
 Esta ferramenta automatiza a busca por sites de veículos de comunicação a partir de um arquivo de texto (.txt).
 **Formato do .txt:** A primeira linha deve ser `nome,regiao`. As linhas seguintes devem ter o nome do veículo, uma vírgula, e a região.
@@ -54,18 +51,15 @@ if uploaded_file is not None:
                     status_text.text(progress_text)
                     progress_bar.progress((index + 1) / total_rows, text=progress_text)
 
-                    search_result = search(query, num_results=1, lang='pt-br', sleep_interval=5)
+                    # A busca agora não tem mais a pausa interna
+                    search_result = search(query, num_results=1, lang='pt-br') 
                     
-                    # --- INÍCIO DA CORREÇÃO ---
-                    # 1. Converte o resultado (generator) para uma lista
                     lista_de_resultados = list(search_result)
                     
-                    # 2. Verifica se a lista não está vazia antes de pegar o item
                     if lista_de_resultados:
                         veiculo['Site_Encontrado'] = lista_de_resultados[0]
                     else:
                         veiculo['Site_Encontrado'] = "Não encontrado"
-                    # --- FIM DA CORREÇÃO ---
                 
                 except Exception as e:
                     error_message = f"Erro na busca por '{nome}'. Motivo: {e}"
@@ -73,6 +67,13 @@ if uploaded_file is not None:
                     veiculo['Site_Encontrado'] = "Falha na busca"
                 
                 resultados_finais.append(veiculo)
+
+                # --- MUDANÇA IMPORTANTE ---
+                # Adicionamos a pausa aqui, com uma mensagem de feedback
+                if index < total_rows - 1: # Não pausa depois do último item
+                    status_text.info(f"Pausa de 5s para evitar bloqueio... Próximo: item {index + 2}/{total_rows}")
+                    time.sleep(5)
+
 
             status_text.success("✅ Busca concluída!")
             st.session_state.final_data = resultados_finais
