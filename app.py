@@ -1,31 +1,63 @@
-# --- CÓDIGO COMPLETO E CORRIGIDO (v5) ---
+# --- CÓDIGO FINAL E SIMPLIFICADO (v7 - Requests) ---
 
 import streamlit as st
 import time
-from googlesearch import search
+import requests
+from bs4 import BeautifulSoup
 import io
 import csv
+import urllib.parse
 
+# --- Nova Função de Busca (mais estável) ---
+def buscar_link_portal(nome_portal):
+    """
+    Busca no Google usando requests e beautifulsoup para encontrar o primeiro link.
+    """
+    try:
+        query = urllib.parse.quote_plus(f"{nome_portal} site oficial")
+        url = f"https://www.google.com/search?q={query}"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status() # Gera erro se a requisição falhar (ex: 429)
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Este seletor busca pelo link dentro da principal divisão de resultados do Google
+        result_tag = soup.select_one("div.yuRUbf > a")
+        
+        if result_tag and result_tag.has_attr('href'):
+            return result_tag['href']
+        else:
+            return "Link não encontrado."
+            
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            return "ERRO: Google bloqueou por excesso de buscas."
+        return f"ERRO de HTTP: {e}"
+    except Exception as e:
+        return f"ERRO inesperado: {e}"
+
+# --- Função para gerar um arquivo CSV para download (sem mudanças) ---
 def to_csv_string(lista_de_dados):
     output = io.StringIO()
-    if not lista_de_dados:
-        return ""
+    if not lista_de_dados: return ""
     headers = lista_de_dados[0].keys()
     writer = csv.DictWriter(output, fieldnames=headers)
     writer.writeheader()
     writer.writerows(lista_de_dados)
     return output.getvalue()
 
+# --- Interface da Aplicação ---
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
-
-st.title("🌐 Buscador de Sites de Portais (v5 - Feedback)")
-st.markdown("""
-Esta ferramenta automatiza a busca por sites de veículos de comunicação a partir de um arquivo de texto (.txt).
-**Formato do .txt:** A primeira linha deve ser `nome,regiao`. As linhas seguintes devem ter o nome do veículo, uma vírgula, e a região.
-""")
+st.title("🌐 Buscador de Sites Simples (v7 - Requests)")
+st.markdown("Esta ferramenta usa um método de busca direto para encontrar sites de portais a partir de um arquivo .txt.")
 
 uploaded_file = st.file_uploader(
-    "Faça o upload do seu arquivo .txt aqui",
+    "Faça o upload do seu arquivo .txt (formato: nome,regiao)",
     type=['txt']
 )
 
@@ -38,51 +70,35 @@ if uploaded_file is not None:
         st.success(f"Arquivo '{uploaded_file.name}' carregado com sucesso!")
         st.write(f"Encontrados {len(lista_de_veiculos)} veículos para pesquisar.")
 
-        if st.button("🚀 Iniciar Busca de Sites", type="primary"):
+        if st.button("🚀 Iniciar Busca Simples", type="primary"):
             resultados_finais = []
             total_rows = len(lista_de_veiculos)
             progress_bar = st.progress(0, text="Iniciando...")
             status_text = st.empty()
 
             for index, veiculo in enumerate(lista_de_veiculos):
-                try:
-                    nome = veiculo.get('nome', '')
-                    regiao = veiculo.get('regiao', '')
-                    query = f"{nome} {regiao} portal de notícias site oficial"
-                    
-                    progress_text = f"Buscando por: {nome}... ({index + 1}/{total_rows})"
-                    status_text.text(progress_text)
-                    progress_bar.progress((index + 1) / total_rows, text=progress_text)
-
-                    # A busca agora não tem mais a pausa interna
-                    search_result = search(query, num_results=1, lang='pt-br') 
-                    
-                    lista_de_resultados = list(search_result)
-                    
-                    if lista_de_resultados:
-                        veiculo['Site_Encontrado'] = lista_de_resultados[0]
-                    else:
-                        veiculo['Site_Encontrado'] = "Não encontrado"
+                nome = veiculo.get('nome', '')
                 
-                except Exception as e:
-                    error_message = f"Erro na busca por '{nome}'. Motivo: {e}"
-                    st.error(error_message)
-                    veiculo['Site_Encontrado'] = "Falha na busca"
+                progress_text = f"Buscando por: {nome}... ({index + 1}/{total_rows})"
+                status_text.text(progress_text)
+                progress_bar.progress((index + 1) / total_rows, text=progress_text)
+
+                # Chama a nova função de busca
+                resultado_link = buscar_link_portal(nome)
+                veiculo['Site_Encontrado'] = resultado_link
                 
                 resultados_finais.append(veiculo)
 
-                # Adicionamos a pausa aqui, com uma mensagem de feedback
-                if index < total_rows - 1: # Não pausa depois do último item
-                    status_text.info(f"Pausa de 5s para evitar bloqueio... Próximo: item {index + 2}/{total_rows}")
-                    time.sleep(5)
-
+                # Pausa de segurança OBRIGATÓRIA para evitar bloqueio
+                if index < total_rows - 1:
+                    status_text.info(f"Pausa de 7s para evitar bloqueio... Próximo: item {index + 2}/{total_rows}")
+                    time.sleep(7)
 
             status_text.success("✅ Busca concluída!")
             st.session_state.final_data = resultados_finais
 
     except Exception as e:
         st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
-        st.warning("Verifique se o arquivo .txt está no formato correto (separado por vírgulas).")
 
 if 'final_data' in st.session_state:
     st.markdown("---")
@@ -98,4 +114,3 @@ if 'final_data' in st.session_state:
         file_name="sites_encontrados.csv",
         mime="text/csv"
     )
-
