@@ -1,9 +1,7 @@
-# Conteúdo ATUALIZADO para o seu arquivo app.py
-
 import streamlit as st
 import pandas as pd
 import time
-from googlesearch import search
+# from googlesearch import search  <- DESATIVADO PARA TESTE
 import io
 
 # --- Função Auxiliar (sem mudanças) ---
@@ -14,10 +12,10 @@ def to_excel_bytes(df):
     processed_data = output.getvalue()
     return processed_data
 
-# --- Interface da Aplicação (sem mudanças) ---
+# --- Interface da Aplicação (título com v2 para confirmar a atualização) ---
 st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
 
-st.title("🌐 Buscador de Sites de Portais (v2)")
+st.title("🌐 Buscador de Sites de Portais (v2)") # Mantemos o v2 para saber que atualizou
 st.markdown("""
 Esta ferramenta automatiza a busca por sites de veículos de comunicação.
 **Como usar:**
@@ -45,37 +43,17 @@ if uploaded_file is not None:
             status_text = st.empty()
 
             for index, row in df.iterrows():
-                # --- INÍCIO DA MUDANÇA IMPORTANTE ---
-                try:
-                    nome = str(row['nome'])
-                    regiao = str(row.get('regiao', ''))
-                    query = f"{nome} {regiao} portal de notícias site oficial"
-                    
-                    progress_text = f"Buscando por: {nome}... ({index + 1}/{total_rows})"
-                    status_text.text(progress_text)
-                    progress_bar.progress((index + 1) / total_rows, text=progress_text)
+                nome = str(row['nome'])
+                progress_text = f"Processando: {nome}... ({index + 1}/{total_rows})"
+                status_text.text(progress_text)
+                progress_bar.progress((index + 1) / total_rows, text=progress_text)
 
-                    # Bloco de busca agora está dentro de um try/except
-                    search_result = search(query, num_results=1, lang='pt-br', sleep_interval=5) # Aumentamos o intervalo para 5s
-                    
-                    if search_result:
-                        primeiro_link = search_result[0]
-                        lista_sites_encontrados.append(primeiro_link)
-                    else:
-                        lista_sites_encontrados.append("Não encontrado")
+                # --- PARTE DA BUSCA FOI DESATIVADA ---
+                # Em vez de buscar, apenas adicionamos uma mensagem de teste
+                lista_sites_encontrados.append("Busca desativada para teste")
+                time.sleep(0.1) # Pequena pausa para simular processamento
                 
-                except Exception as e:
-                    # Se qualquer erro acontecer na busca, o código abaixo será executado
-                    error_message = f"Erro na busca por '{nome}'. Motivo: {e}"
-                    st.error(error_message) # Mostra o erro em vermelho na tela
-                    lista_sites_encontrados.append("Falha na busca")
-                    # O loop continua para o próximo item em vez de quebrar
-                
-                # --- FIM DA MUDANÇA IMPORTANTE ---
-                
-                # Pausa para não sobrecarregar o Google (já incluída no search)
-
-            status_text.success("✅ Busca concluída!")
+            status_text.success("✅ Processamento de teste concluído!")
             df['Site_Encontrado'] = lista_sites_encontrados
             st.session_state.final_df = df
 
@@ -95,4 +73,3 @@ if 'final_df' in st.session_state:
         file_name="sites_encontrados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
