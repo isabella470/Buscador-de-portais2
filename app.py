@@ -9,27 +9,28 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 
 # --- Configuração da Página do Streamlit ---
-st.set_page_config(page_title="Buscador e Extrator de HTML", page_icon="🔎", layout="wide")
+st.set_page_config(page_title="Buscador de Portais", page_icon="🔎", layout="wide")
 
-st.title("🔎 Buscador de Portais e Extrator de HTML")
-st.markdown("Cole uma lista de nomes, clique em 'Iniciar Busca'. Após os resultados aparecerem, escolha uma página para extrair seu código HTML.")
+st.title("🔎 Buscador Automatizado de Portais e Sites")
+st.markdown("Cole uma lista de nomes (um por linha) e a ferramenta buscará os links principais no Google.")
 
 # --- Cache para o WebDriver ---
 @st.cache_resource
 def get_driver():
-    """Inicializa e retorna o driver do Selenium, mantendo-o em cache."""
+    # Opções do Selenium para rodar no Streamlit Cloud
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     
+    # Usa o chromedriver instalado pelo packages.txt
     service = Service()
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
 def realizar_busca(driver, query, num_resultados=5):
-    """Busca no Google e extrai os links dos resultados."""
+    """Função para buscar no Google e extrair links usando Selenium."""
     urls_encontradas = []
     try:
         query_formatada = query.replace(" ", "+")
@@ -48,22 +49,11 @@ def realizar_busca(driver, query, num_resultados=5):
         
     return urls_encontradas[:num_resultados]
 
-def extrair_html(driver, url):
-    """Navega até uma URL e retorna o código-fonte HTML da página."""
-    try:
-        driver.get(url)
-        time.sleep(3) # Pausa para permitir o carregamento de JavaScript
-        return driver.page_source
-    except Exception as e:
-        return f"Não foi possível extrair o HTML da página {url}. Erro: {e}"
-
 # --- Interface do Usuário ---
-
-# Inicializa o session_state para guardar os resultados
 if 'resultados_df' not in st.session_state:
-    st.session_state['resultados_df'] = None
+    st.session_state.resultados_df = None
 
-input_text = st.text_area("Cole a lista de portais aqui (um por linha):", height=200, placeholder="Portal Revista Acontece\nCariri News\nSobral News...")
+input_text = st.text_area("Cole a lista de portais aqui (um por linha):", height=250, placeholder="Portal Revista Acontece\nCariri News\nSobral News...")
 
 if st.button("🚀 Iniciar Busca"):
     if not input_text.strip():
@@ -73,7 +63,7 @@ if st.button("🚀 Iniciar Busca"):
         
         df_final = pd.DataFrame()
         
-        with st.spinner("Aguarde... a busca está em andamento..."):
+        with st.spinner("Aguarde... a busca está em andamento. Isso pode levar alguns minutos..."):
             driver = get_driver()
             status_text = st.empty()
 
@@ -85,68 +75,47 @@ if st.button("🚀 Iniciar Busca"):
                 portal_principal = resultados_portal[0] if resultados_portal else "Não encontrado"
                 
                 query_geral = f'"{nome_busca}"'
-                resultados_gerais = realizar_busca(driver, query_geral)
+                resultados_gerais = realizar_busca(driver, query_geral, num_resultados=5)
                 
+                resultados_para_df = []
                 if resultados_gerais:
                     for url in resultados_gerais:
                         dominio = urlparse(url).netloc.replace("www.", "")
-                        nova_linha = pd.DataFrame([{
+                        resultados_para_df.append({
                             "Fonte Pesquisada": nome_busca,
                             "Portal Principal Sugerido": portal_principal,
                             "Site (Domínio)": dominio,
                             "URL": url
-                        }])
-                        df_final = pd.concat([df_final, nova_linha], ignore_index=True)
+                        })
                 else:
-                    nova_linha = pd.DataFrame([{
+                    resultados_para_df.append({
                         "Fonte Pesquisada": nome_busca,
                         "Portal Principal Sugerido": portal_principal,
                         "Site (Domínio)": "N/A",
                         "URL": "Nenhum resultado encontrado"
-                    }])
-                    df_final = pd.concat([df_final, nova_linha], ignore_index=True)
-            
+                    })
+                
+                df_temp = pd.DataFrame(resultados_para_df)
+                df_final = pd.concat([df_final, df_temp], ignore_index=True)
+
             status_text.empty()
 
-        st.success("✅ Busca finalizada!")
-        # Armazena os resultados no session_state para evitar novas buscas
-        st.session_state['resultados_df'] = df_final
+        st.success("✅ Busca finalizada com sucesso!")
+        st.session_state.resultados_df = df_final
 
-# --- Seção de Resultados e Extração de HTML ---
-if st.session_state['resultados_df'] is not in (None, 'DataFrame is empty'):
-    
-    st.subheader("Resultados da Busca")
-    df_resultados = st.session_state['resultados_df']
-    st.dataframe(df_resultados)
 
-    # Botão para baixar o Excel com a lista de URLs
+# --- Seção de Resultados ---
+if st.session_state.resultados_df is not None:
+    st.dataframe(st.session_state.resultados_df)
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_resultados.to_excel(writer, index=False, sheet_name='Resultados')
+        st.session_state.resultados_df.to_excel(writer, index=False, sheet_name='Resultados')
     
     st.download_button(
-        label="📥 Baixar lista de URLs em Excel",
+        label="📥 Baixar resultados em Excel",
         data=output.getvalue(),
         file_name="resultados_buscas.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    st.subheader("Extrair Código HTML de uma Página")
-    
-    # Cria uma lista de opções para o selectbox
-    opcoes = [f"{row['Site (Domínio)']} - {row['URL']}" for index, row in df_resultados.iterrows() if row['URL'] != "Nenhum resultado encontrado"]
-    
-    if opcoes:
-        url_selecionada_str = st.selectbox("Selecione uma página para extrair o HTML:", options=opcoes)
-        
-        if st.button("📄 Extrair HTML"):
-            # Extrai a URL da string selecionada
-            url_para_extrair = url_selecionada_str.split(' - ')[-1]
-
-            with st.spinner(f"Navegando até {url_para_extrair} e extraindo conteúdo..."):
-                driver = get_driver()
-                html_content = extrair_html(driver, url_para_extrair)
-                
-                st.success("HTML extraído com sucesso!")
-                # Exibe o código HTML em uma caixa de código
-                st.code(html_content, language='html', line_numbers=True)
