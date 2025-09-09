@@ -1,22 +1,33 @@
 import streamlit as st
 import pandas as pd
 import io
+import requests
+from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from duckduckgo_search import DDGS
+import time
 
 # --- Configuração da Página do Streamlit ---
 st.set_page_config(page_title="Buscador de Portais", page_icon="🔎", layout="wide")
 
-st.title("🔎 Buscador Automatizado de Portais")
-st.markdown("A ferramenta buscará no DuckDuckGo para encontrar os sites oficiais dos portais.")
+st.title("🔎 Buscador Automatizado de Portais (Gratuito)")
+st.markdown("A ferramenta buscará no DuckDuckGo (versão HTML) para encontrar os sites oficiais dos portais.")
 
-# --- Função de busca ---
-def realizar_busca(query, num_resultados=5):
+# --- Função de busca via requests + BeautifulSoup ---
+def buscar_site_portal(query, max_results=3):
     resultados = []
-    with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=num_resultados):
-            if "href" in r:
-                resultados.append(r["href"])
+    url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+    headers = {"User-Agent": "Mozilla/5.0"}  # simula navegador
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, "html.parser")
+        links = soup.select("a.result__a")  # seletor de links da versão HTML
+        for link in links[:max_results]:
+            href = link.get("href")
+            if href and href.startswith("http"):
+                resultados.append(href)
+        time.sleep(2)  # delay para reduzir risco de bloqueio
+    except Exception as e:
+        st.warning(f"Erro na busca por '{query}': {e}")
     return resultados
 
 # --- Estado inicial ---
@@ -41,7 +52,7 @@ if st.button("🚀 Iniciar Busca"):
         with st.spinner("Aguarde... a busca está em andamento..."):
             for i, nome_busca in enumerate(lista_de_buscas):
                 st.info(f"Buscando por: '{nome_busca}' ({i+1}/{len(lista_de_buscas)})")
-                resultados_gerais = realizar_busca(f'"{nome_busca}"')
+                resultados_gerais = buscar_site_portal(f'"{nome_busca}"')
                 if resultados_gerais:
                     for url in resultados_gerais:
                         dominio = urlparse(url).netloc.replace("www.", "")
@@ -74,3 +85,5 @@ if st.session_state.resultados_df is not None:
         file_name="resultados_buscas.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+
