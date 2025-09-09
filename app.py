@@ -1,116 +1,126 @@
-# --- CÓDIGO FINAL E SIMPLIFICADO (v7 - Requests) ---
-
 import streamlit as st
+import pandas as pd
 import time
-import requests
-from bs4 import BeautifulSoup
 import io
-import csv
-import urllib.parse
+from urllib.parse import urlparse
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
-# --- Nova Função de Busca (mais estável) ---
-def buscar_link_portal(nome_portal):
-    """
-    Busca no Google usando requests e beautifulsoup para encontrar o primeiro link.
-    """
+# --- Configuração da Página do Streamlit ---
+st.set_page_config(page_title="Buscador de Portais", page_icon="🔎", layout="wide")
+
+st.title("🔎 Buscador Automatizado de Portais e Sites")
+st.markdown("Cole uma lista de nomes (um por linha) e a ferramenta buscará os links principais no Google.")
+
+# --- Cache para o WebDriver ---
+# Isso evita que o WebDriver seja reinstalado a cada ação na página, melhorando a performance.
+@st.cache_resource
+def get_driver_service():
+    # Opções do Selenium para rodar em ambiente de servidor (como o Streamlit Cloud)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Roda o navegador em segundo plano
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    
+    # Instala e gerencia o ChromeDriver automaticamente
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
+
+def realizar_busca(driver, query, num_resultados=5):
+    """Função para buscar no Google e extrair links usando Selenium."""
+    urls_encontradas = []
     try:
-        query = urllib.parse.quote_plus(f"{nome_portal} site oficial")
-        url = f"https://www.google.com/search?q={query}"
+        # Codifica a query para ser usada na URL do Google
+        query_formatada = query.replace(" ", "+")
+        driver.get(f"https://www.google.com/search?q={query_formatada}&num={num_resultados}")
+        time.sleep(2)  # Espera a página carregar
+
+        # Encontra os elementos que contêm os links dos resultados
+        elementos = driver.find_elements(By.CSS_SELECTOR, "a > h3")
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
-        response = requests.get(url, headers=headers)
-        response.raise_for_status() # Gera erro se a requisição falhar (ex: 429)
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Este seletor busca pelo link dentro da principal divisão de resultados do Google
-        result_tag = soup.select_one("div.yuRUbf > a")
-        
-        if result_tag and result_tag.has_attr('href'):
-            return result_tag['href']
-        else:
-            return "Link não encontrado."
-            
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            return "ERRO: Google bloqueou por excesso de buscas."
-        return f"ERRO de HTTP: {e}"
-    except Exception as e:
-        return f"ERRO inesperado: {e}"
-
-# --- Função para gerar um arquivo CSV para download (sem mudanças) ---
-def to_csv_string(lista_de_dados):
-    output = io.StringIO()
-    if not lista_de_dados: return ""
-    headers = lista_de_dados[0].keys()
-    writer = csv.DictWriter(output, fieldnames=headers)
-    writer.writeheader()
-    writer.writerows(lista_de_dados)
-    return output.getvalue()
-
-# --- Interface da Aplicação ---
-st.set_page_config(page_title="Buscador de Sites", page_icon="🌐")
-st.title("🌐 Buscador de Sites Simples (v7 - Requests)")
-st.markdown("Esta ferramenta usa um método de busca direto para encontrar sites de portais a partir de um arquivo .txt.")
-
-uploaded_file = st.file_uploader(
-    "Faça o upload do seu arquivo .txt (formato: nome,regiao)",
-    type=['txt']
-)
-
-if uploaded_file is not None:
-    try:
-        string_data = uploaded_file.getvalue().decode('utf-8')
-        reader = csv.DictReader(io.StringIO(string_data))
-        lista_de_veiculos = list(reader)
-        
-        st.success(f"Arquivo '{uploaded_file.name}' carregado com sucesso!")
-        st.write(f"Encontrados {len(lista_de_veiculos)} veículos para pesquisar.")
-
-        if st.button("🚀 Iniciar Busca Simples", type="primary"):
-            resultados_finais = []
-            total_rows = len(lista_de_veiculos)
-            progress_bar = st.progress(0, text="Iniciando...")
-            status_text = st.empty()
-
-            for index, veiculo in enumerate(lista_de_veiculos):
-                nome = veiculo.get('nome', '')
-                
-                progress_text = f"Buscando por: {nome}... ({index + 1}/{total_rows})"
-                status_text.text(progress_text)
-                progress_bar.progress((index + 1) / total_rows, text=progress_text)
-
-                # Chama a nova função de busca
-                resultado_link = buscar_link_portal(nome)
-                veiculo['Site_Encontrado'] = resultado_link
-                
-                resultados_finais.append(veiculo)
-
-                # Pausa de segurança OBRIGATÓRIA para evitar bloqueio
-                if index < total_rows - 1:
-                    status_text.info(f"Pausa de 7s para evitar bloqueio... Próximo: item {index + 2}/{total_rows}")
-                    time.sleep(7)
-
-            status_text.success("✅ Busca concluída!")
-            st.session_state.final_data = resultados_finais
+        for elem in elementos:
+            link = elem.find_element(By.XPATH, "..").get_attribute("href")
+            if link and link.startswith("http"):
+                urls_encontradas.append(link)
 
     except Exception as e:
-        st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+        st.warning(f"Ocorreu um erro ao buscar por '{query}': {e}")
+        
+    return urls_encontradas[:num_resultados]
 
-if 'final_data' in st.session_state:
-    st.markdown("---")
-    st.subheader("Resultados da Busca")
-    final_data = st.session_state.final_data
-    st.dataframe(final_data)
-    
-    csv_string = to_csv_string(final_data)
-    
-    st.download_button(
-        label="📥 Baixar Resultados em CSV",
-        data=csv_string,
-        file_name="sites_encontrados.csv",
-        mime="text/csv"
-    )
+# --- Interface do Usuário ---
+
+# Área para o usuário colar a lista de jornais/fontes
+input_text = st.text_area("Cole a lista de portais aqui (um por linha):", height=250, placeholder="Portal Revista Acontece\nCariri News\nSobral News...")
+
+if st.button("🚀 Iniciar Busca"):
+    if input_text.strip() == "":
+        st.warning("Por favor, insira pelo menos um nome na lista.")
+    else:
+        # Processa a lista de entrada
+        lista_de_buscas = [line.strip() for line in input_text.split('\n') if line.strip()]
+        
+        df_final = pd.DataFrame()
+        
+        # Inicia o spinner de carregamento
+        with st.spinner("Aguarde... a busca está em andamento. Isso pode levar alguns minutos..."):
+            driver = get_driver_service()
+            status_text = st.empty() # Placeholder para mensagens de progresso
+
+            for i, nome_busca in enumerate(lista_de_buscas):
+                status_text.info(f"Buscando por: '{nome_busca}' ({i+1}/{len(lista_de_buscas)})")
+                
+                # Busca pelo "portal principal"
+                query_portal = f'"{nome_busca}" site oficial'
+                resultados_portal = realizar_busca(driver, query_portal, num_resultados=1)
+                portal_principal = resultados_portal[0] if resultados_portal else "Não encontrado"
+                
+                # Busca por outras URLs
+                query_geral = f'"{nome_busca}"'
+                resultados_gerais = realizar_busca(driver, query_geral, num_resultados=5)
+                
+                # Monta um DataFrame temporário
+                resultados_para_df = []
+                if resultados_gerais:
+                    for url in resultados_gerais:
+                        dominio = urlparse(url).netloc.replace("www.", "")
+                        resultados_para_df.append({
+                            "Fonte Pesquisada": nome_busca,
+                            "Portal Principal Sugerido": portal_principal,
+                            "Site (Domínio)": dominio,
+                            "URL": url
+                        })
+                else:
+                    resultados_para_df.append({
+                        "Fonte Pesquisada": nome_busca,
+                        "Portal Principal Sugerido": portal_principal,
+                        "Site (Domínio)": "N/A",
+                        "URL": "Nenhum resultado encontrado"
+                    })
+                
+                df_temp = pd.DataFrame(resultados_para_df)
+                df_final = pd.concat([df_final, df_temp], ignore_index=True)
+
+            status_text.empty() # Limpa a mensagem de progresso
+
+        st.success("✅ Busca finalizada com sucesso!")
+        
+        # --- Exibe os resultados e oferece o download ---
+        st.dataframe(df_final)
+
+        # Prepara o arquivo Excel para download em memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_final.to_excel(writer, index=False, sheet_name='Resultados')
+        
+        st.download_button(
+            label="📥 Baixar resultados em Excel",
+            data=output.getvalue(),
+            file_name="resultados_buscas.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
