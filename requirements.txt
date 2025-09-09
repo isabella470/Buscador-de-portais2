@@ -1,4 +1,4 @@
 streamlit
 pandas
 openpyxl
-duckduckgo-search
+duckduckgo-search==5.3.0
