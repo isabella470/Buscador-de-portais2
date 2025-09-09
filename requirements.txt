@@ -3,5 +3,3 @@ streamlit
 selenium
 pandas
 openpyxl
-webdriver-manager
-
