@@ -24,7 +24,7 @@ def get_driver():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     
-    # IMPORTANTE: Usa o chromedriver instalado pelo packages.txt
+    # Usa o chromedriver instalado pelo packages.txt
     service = Service()
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
@@ -95,9 +95,6 @@ if st.button("🚀 Iniciar Busca"):
                 df_temp = pd.DataFrame(resultados_para_df)
                 df_final = pd.concat([df_final, df_temp], ignore_index=True)
 
-            # Fechar o driver não é estritamente necessário com @st.cache_resource, 
-            # mas é boa prática se você não for reutilizá-lo imediatamente.
-            # driver.quit() 
             status_text.empty()
 
         st.success("✅ Busca finalizada com sucesso!")
@@ -113,5 +110,3 @@ if st.button("🚀 Iniciar Busca"):
             file_name="resultados_buscas.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        
-
