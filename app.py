@@ -17,43 +17,62 @@ st.markdown("Cole uma lista de nomes (um por linha) e a ferramenta buscará os l
 # --- Cache para o WebDriver ---
 @st.cache_resource
 def get_driver():
-    # Opções do Selenium para rodar no Streamlit Cloud
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     
-    # Usa o chromedriver instalado pelo packages.txt
     service = Service()
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
+# --- FUNÇÃO DE BUSCA ATUALIZADA ---
 def realizar_busca(driver, query, num_resultados=5):
-    """Função para buscar no Google e extrair links usando Selenium."""
+    """Função para buscar no Google e extrair links usando um seletor mais robusto."""
     urls_encontradas = []
     try:
         query_formatada = query.replace(" ", "+")
-        driver.get(f"https://www.google.com/search?q={query_formatada}&num={num_resultados}")
+        # Adicionando &hl=pt-br para forçar resultados em português do Brasil
+        url_busca = f"https://www.google.com/search?q={query_formatada}&num={num_resultados}&hl=pt-br"
+        driver.get(url_busca)
         time.sleep(2)
 
-        elementos = driver.find_elements(By.CSS_SELECTOR, "a > h3")
+        # NOVO SELETOR: Procura por divs que geralmente contêm os resultados da busca
+        # e então pega o primeiro link (a) dentro deles.
+        elementos = driver.find_elements(By.CSS_SELECTOR, "div.g") 
         
+        if not elementos:
+            # Se o primeiro seletor falhar, tenta um alternativo.
+            st.warning(f"Seletor principal 'div.g' não encontrou resultados para '{query}'. Tentando seletor alternativo...")
+            elementos = driver.find_elements(By.CSS_SELECTOR, "div[data-ved]")
+
         for elem in elementos:
-            link = elem.find_element(By.XPATH, "..").get_attribute("href")
-            if link and link.startswith("http"):
-                urls_encontradas.append(link)
+            try:
+                # Tenta encontrar o link dentro do elemento
+                link = elem.find_element(By.TAG_NAME, "a").get_attribute("href")
+                if link and link.startswith("http"):
+                    urls_encontradas.append(link)
+            except:
+                # Se um 'div.g' não tiver um link (ex: "As pessoas também perguntam"), ignora e continua
+                continue
 
     except Exception as e:
         st.warning(f"Ocorreu um erro ao buscar por '{query}': {e}")
+        # Tenta salvar uma captura de tela para depuração (útil se estiver rodando localmente)
+        # Em um app deployed, isso não será visível, mas pode ajudar a diagnosticar.
+        try:
+            driver.save_screenshot("debug_screenshot.png")
+        except:
+            pass
         
     return urls_encontradas[:num_resultados]
 
-# --- Interface do Usuário ---
+# --- Interface do Usuário (sem alterações) ---
 if 'resultados_df' not in st.session_state:
     st.session_state.resultados_df = None
 
-input_text = st.text_area("Cole a lista de portais aqui (um por linha):", height=250, placeholder="Portal Revista Acontece\nCariri News\nSobral News...")
+input_text = st.text_area("Cole a lista de portais aqui (um por linha):", height=250, placeholder="Rádio Santana FM\nPortal Guaraciaba Notícias\nIpu Notícias...")
 
 if st.button("🚀 Iniciar Busca"):
     if not input_text.strip():
@@ -104,7 +123,7 @@ if st.button("🚀 Iniciar Busca"):
         st.session_state.resultados_df = df_final
 
 
-# --- Seção de Resultados ---
+# --- Seção de Resultados (sem alterações) ---
 if st.session_state.resultados_df is not None:
     st.dataframe(st.session_state.resultados_df)
 
@@ -118,4 +137,3 @@ if st.session_state.resultados_df is not None:
         file_name="resultados_buscas.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
